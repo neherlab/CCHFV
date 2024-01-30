@@ -1,13 +1,9 @@
 rule all:
     input:
-        #tree = expand("results/tree_{Segment}.nwk", Segment = glob_wildcards("./data/metadata_{Segment}.tsv").Segment)
-        auspice_json = expand("auspice/CCHF_{Segment}_treeknit.json", Segment = glob_wildcards("./data/metadata_{Segment}.tsv").Segment)
-
+        auspice_json = expand("auspice/CCHF_{Segment}_renamed.json", Segment = glob_wildcards("./data/metadata_{Segment}.tsv").Segment)
 
 input_fasta = "data/sequences_{Segment}.fasta",
 input_metadata = "data/metadata_{Segment}.tsv",
-input_fasta_index = "data/sequences_M.fasta",
-input_metadata_index = "data/metadata_M.tsv",
 dropped_strains = "config/dropped_strains.txt",
 reference = "config/outgroup_{Segment}.gb",
 colors = "config/colors.tsv",
@@ -20,9 +16,9 @@ rule index_sequences:
         Creating an index of sequence composition for filtering.
         """
     input:
-        sequences = input_fasta_index
+        sequences = input_fasta
     output:
-        sequence_index = "results/sequence_index.tsv"
+        sequence_index = "results/sequence_index_{Segment}.tsv"
     shell:
         """
         augur index \
@@ -39,16 +35,16 @@ rule filter:
           - excluding strains in {input.exclude}
         """
     input:
-        sequences = input_fasta_index,
-        sequence_index = "results/sequence_index.tsv",
-        metadata = input_metadata_index,
+        sequences = input_fasta,
+        sequence_index = "results/sequence_index_{Segment}.tsv",
+        metadata = input_metadata,
         exclude = dropped_strains
     output:
-        filtered_metadata = "results/initial_filtered_metadata.tsv"
+        sequences = "results/filtered_{Segment}.fasta"
     params:
         group_by = "country year",
         sequences_per_group = 20,
-        id_column = "group_id",
+        id_column = "accession",
         min_date = 1900,
         query = "nr_segments == 'all'"
     
@@ -59,44 +55,13 @@ rule filter:
             --sequence-index {input.sequence_index} \
             --metadata {input.metadata} \
             --exclude {input.exclude} \
-            --output-metadata {output.filtered_metadata} \
+            --output {output.sequences} \
             --group-by {params.group_by} \
             --sequences-per-group {params.sequences_per_group} \
             --metadata-id-columns {params.id_column} \
             --min-date {params.min_date} \
             --query {params.query:q}
         
-        """
-
-rule extract_selected_groups:
-    message: 
-        """
-        Select the group id of filtered sequences
-        """
-    input:
-        metadata = rules.filter.output.filtered_metadata
-    output:
-        filtered_groups_list = "results/filtered_groups.tsv",
-        filtered_groups = "results/filtered_groups.txt"
-    shell:
-        """
-        tsv-select -H -f group_id {input.metadata} > {output.filtered_groups_list}
-        cp {output.filtered_groups_list} {output.filtered_groups}
-        """
-
-rule select_sequences:
-    message: 
-        """
-        Select all sequences according to accessions list
-        """
-    input: 
-        groups = rules.extract_selected_groups.output.filtered_groups,
-        sequences = input_fasta
-    output:
-        selected_sequences = "results/selected_sequences_{Segment}.fasta"
-    shell:
-        """
-        seqkit grep -f {input.groups} < {input.sequences} > {output.selected_sequences}
         """
 
 rule align:
@@ -106,7 +71,7 @@ rule align:
           - filling gaps with N
         """
     input:
-        sequences = rules.select_sequences.output.selected_sequences,
+        sequences = rules.filter.output.sequences,
         reference = reference
     output:
         alignment = "results/aligned_{Segment}.fasta"
@@ -115,7 +80,6 @@ rule align:
         augur align \
             --sequences {input.sequences} \
             --reference-sequence {input.reference} \
-            --remove-reference\
             --output {output.alignment} \
             --fill-gaps
         """
@@ -130,7 +94,6 @@ rule tree:
         """
         augur tree \
             --alignment {input.alignment} \
-            --tree-builder-args="-czb" \
             --output {output.tree}
         """
 
@@ -154,8 +117,7 @@ rule refine:
         coalescent = "opt",
         date_inference = "marginal",
         clock_filter_iqd = 4,
-        id_column = "group_id",
-        root = "mid_point"
+        id_column = "accession"
     shell:
         """
         augur refine \
@@ -164,40 +126,18 @@ rule refine:
             --metadata {input.metadata} \
             --output-tree {output.tree} \
             --output-node-data {output.node_data} \
-            --root {params.root} \
+            --timetree \
+            --coalescent {params.coalescent} \
+            --date-confidence \
+            --date-inference {params.date_inference} \
+            --clock-filter-iqd {params.clock_filter_iqd} \
             --metadata-id-columns {params.id_column}
         """
-
-rule use_treeknit:
-    message:
-        """
-        Using treeknit to detangle trees
-        """
-    input: 
-        tree_S = "results/tree_S.nwk",
-        tree_M = "results/tree_M.nwk",
-        tree_L = "results/tree_L.nwk"
-    output: 
-        tree_S_res = "results/tree_S_resolved.nwk",
-        tree_M_res = "results/tree_M_resolved.nwk",
-        tree_L_res = "results/tree_L_resolved.nwk"
-    shell:
-        """
-        julia scripts/treeknit_cli.jl \
-            {input.tree_S} \
-            {input.tree_M} \
-            {input.tree_L} \
-            --output_S {output.tree_S_res} \
-            --output_M {output.tree_M_res} \
-            --output_L {output.tree_L_res}
-        """
-
-    
 
 rule ancestral:
     message: "Reconstructing ancestral sequences and mutations"
     input:
-        tree = "results/tree_{Segment}_resolved.nwk",
+        tree = rules.refine.output.tree,
         alignment = rules.align.output
     output:
         node_data = "results/nt_muts_{Segment}.json"
@@ -215,7 +155,7 @@ rule ancestral:
 rule translate:
     message: "Translating amino acid sequences"
     input:
-        tree = "results/tree_{Segment}_resolved.nwk",
+        tree = rules.refine.output.tree,
         node_data = rules.ancestral.output.node_data,
         reference = reference
     output:
@@ -232,13 +172,13 @@ rule translate:
 rule traits:
     message: "Inferring ancestral traits for {params.columns!s}"
     input:
-        tree = "results/tree_{Segment}_resolved.nwk",
+        tree = rules.refine.output.tree,
         metadata = input_metadata
     output:
         node_data = "results/traits_{Segment}.json",
     params:
         columns = "region country",
-        id_column = "group_id"
+        id_column = "accession"
     shell:
         """
         augur traits \
@@ -253,7 +193,7 @@ rule traits:
 rule export:
     message: "Exporting data files for for auspice"
     input:
-        tree = "results/tree_{Segment}_resolved.nwk",
+        tree = rules.refine.output.tree,
         metadata = input_metadata,
         branch_lengths = rules.refine.output.node_data,
         traits = rules.traits.output.node_data,
@@ -263,7 +203,7 @@ rule export:
         lat_longs = lat_longs,
         auspice_config = auspice_config
     output:
-        auspice_json = "auspice/CCHF_{Segment}_treeknit.json",
+        auspice_json = "auspice/CCHF_{Segment}.json",
     params: 
         id_column = "accession"
     shell:
@@ -272,13 +212,33 @@ rule export:
             --tree {input.tree} \
             --metadata {input.metadata} \
             --node-data {input.branch_lengths} {input.traits} {input.nt_muts} {input.aa_muts} \
-            --colors {input.colors} \
             --lat-longs {input.lat_longs} \
             --auspice-config {input.auspice_config} \
             --include-root-sequence \
             --output {output.auspice_json} \
             --metadata-id-columns {params.id_column}
         """
+
+rule final_strain_name:
+    input:
+        auspice_json= rules.export.output.auspice_json,
+        metadata = rules.filter.input.metadata,
+    output:
+        auspice_json="auspice/CCHF_{Segment}_renamed.json"
+    params:
+        strain_id="accession",
+        display_strain_field="group_id"
+    shell:
+        """
+        python3 scripts/set_final_strain_name.py --metadata {input.metadata} \
+                --metadata-id-columns {params.strain_id} \
+                --input-auspice-json {input.auspice_json} \
+                --display-strain-name {params.display_strain_field} \
+                --output {output.auspice_json}
+        """
+
+
+
 
 rule clean:
     message: "Removing directories: {params}"
