@@ -1,9 +1,9 @@
 {
   "title": "CCHF Virus",
   "maintainers": [
-    {"name": "Trevor Bedford", "url": "http://bedford.io/team/trevor-bedford/"}
+    {"name": "Jessica Falkowski"}
   ],
-  "build_url": "https://github.com/nextstrain/zika-tutorial",
+  "build_url": "https://github.com/nextstrain/CCHFV",
   "colorings": [
     {
       "key": "gt",
