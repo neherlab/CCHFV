@@ -1,6 +1,6 @@
 rule all:
     input:
-        auspice_json = expand("auspice/CCHF_{Segment}_renamed.json", Segment = glob_wildcards("./data/metadata_{Segment}.tsv").Segment)
+        auspice_json = expand("auspice/CCHF_notreeknit_{Segment}.json", Segment = glob_wildcards("./data/metadata_{Segment}.tsv").Segment)
 
 input_fasta = "data/sequences_{Segment}.fasta",
 input_metadata = "data/metadata_{Segment}.tsv",
@@ -72,7 +72,7 @@ rule extract_selected_groups:
         """
     input:
         metadata = rules.filter.output.filtered_metadata
-   output:
+    output:
         filtered_groups_list = "results/filtered_groups.tsv",
         filtered_groups = "results/filtered_groups.txt"
     shell:
