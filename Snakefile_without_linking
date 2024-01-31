@@ -237,9 +237,6 @@ rule final_strain_name:
                 --output {output.auspice_json}
         """
 
-
-
-
 rule clean:
     message: "Removing directories: {params}"
     params:

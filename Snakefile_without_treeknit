@@ -63,7 +63,6 @@ rule filter:
             --metadata-id-columns {params.id_column} \
             --min-date {params.min_date} \
             --query {params.query:q}
-        
         """
 
 rule extract_selected_groups:
@@ -173,7 +172,7 @@ rule ancestral:
         tree = rules.refine.output.tree,
         alignment = rules.align.output
     output:
-        node_data = "results/nt_muts_{Segment}.json"
+        node_data = "results/nt_muts_notreeknit_{Segment}.json"
     params:
         inference = "joint"
     shell:
@@ -192,7 +191,7 @@ rule translate:
         node_data = rules.ancestral.output.node_data,
         reference = reference
     output:
-        node_data = "results/aa_muts_{Segment}.json"
+        node_data = "results/aa_muts_notreeknit_{Segment}.json"
     shell:
         """
         augur translate \
@@ -208,10 +207,10 @@ rule traits:
         tree = rules.refine.output.tree,
         metadata = input_metadata
     output:
-        node_data = "results/traits_{Segment}.json",
+        node_data = "results/traits_notreeknit_{Segment}.json",
     params:
         columns = "region country",
-        id_column = "accession"
+        id_column = "group_id"
     shell:
         """
         augur traits \
@@ -236,7 +235,7 @@ rule export:
         lat_longs = lat_longs,
         auspice_config = auspice_config
     output:
-        auspice_json = "auspice/CCHF_{Segment}.json",
+        auspice_json = "auspice/CCHF_notreeknit_{Segment}.json",
     params: 
         id_column = "accession"
     shell:
@@ -251,24 +250,6 @@ rule export:
             --include-root-sequence \
             --output {output.auspice_json} \
             --metadata-id-columns {params.id_column}
-        """
-
-rule final_strain_name:
-    input:
-        auspice_json= rules.export.output.auspice_json,
-        metadata = input_metadata,
-    output:
-        auspice_json="auspice/CCHF_{Segment}_renamed.json"
-    params:
-        strain_id="accession",
-        display_strain_field="group_id"
-    shell:
-        """
-        python3 scripts/set_final_strain_name.py --metadata {input.metadata} \
-                --metadata-id-columns {params.strain_id} \
-                --input-auspice-json {input.auspice_json} \
-                --display-strain-name {params.display_strain_field} \
-                --output {output.auspice_json}
         """
 
 rule clean:
