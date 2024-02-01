@@ -84,7 +84,7 @@ rule extract_selected_groups:
 rule select_sequences:
     message: 
         """
-        Select all sequences according to accessions list
+        Select all sequences according to group-id
         """
     input: 
         groups = rules.extract_selected_groups.output.filtered_groups,
