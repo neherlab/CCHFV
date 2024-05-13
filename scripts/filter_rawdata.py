@@ -1,17 +1,45 @@
 import pandas as pd
 from Bio import SeqIO
 import argparse
+import re
+import numpy as np
+import pathlib
 
-def group_metadata(metadata):
+segments = ['M', 'L', 'S']
+
+def get_segment_data(sequences, metadata_df):
+    records = SeqIO.parse(sequences, 'fasta')  
+    segment_dic = {}
+    for record in records: 
+        found = False
+        for segment in segments:
+            re_input = re.compile('.*segment {0}.*'.format(segment), re.IGNORECASE)
+            x = re_input.search(record.description)
+            if x:
+                segment_dic[record.id] = segment
+                found = True
+                break
+        if not found:
+            segment_dic[record.id] = np.nan
+    segment_list = []
+    for accession in metadata_df['Accession']:
+        segment_list.append(segment_dic[accession])
+
+    metadata_df.insert(2, "Segment", segment_list)
+
+
+def group_metadata(df):
     min_length_s = 1000
     min_length_m = 4000
     min_length_l = 10000
-    df = pd.read_csv(metadata)
 
     # Delete rows without date
-    df_filtered = df.dropna(subset=['Collection_Date'])
+    df_filtered = df.dropna(subset=['Isolate Collection date'])
     # Only rows with length > 200
     df_filtered = df_filtered.loc[df_filtered['Length'] > 250]
+
+    # Delete rows without segments
+    df_filtered = df.dropna(subset=['Segment'])
 
     # Only keep sequences with appropriate lengths
     df_filtered = df_filtered.drop(df_filtered[(df_filtered['Segment'] == 'S') & (df_filtered['Length'] < min_length_s)].index)
@@ -23,12 +51,12 @@ def group_metadata(metadata):
     df_grouped['group_id']= 0
 
     # Group sequences according to isolate and collection date
-    grouped = df_grouped.groupby(["Isolate", "Collection_Date"])
+    grouped = df_grouped.groupby(["Isolate Lineage", "Isolate Collection date"])
     groups = grouped.groups.keys()
     group_id = 1
     for g in groups: 
         isolate, date = g
-        df_grouped['group_id']=df_grouped.apply(lambda row:row['group_id']+group_id if row["Isolate"] == isolate and row["Collection_Date"] == date else row['group_id'], axis=1)
+        df_grouped['group_id']=df_grouped.apply(lambda row:row['group_id']+group_id if row["Isolate Lineage"] == isolate and row["Isolate Collection date"] == date else row['group_id'], axis=1)
         group_id += 1
 
     number_of_groups = group_id
@@ -43,10 +71,12 @@ def group_metadata(metadata):
             df_grouped.loc[df_grouped['group_id'] == g, 'nr_segments'] = 'all'
             
     # Rename columns
-    df_grouped = df_grouped.rename(columns= {"Organism_Name":"virus", "Accession": "accession", "Collection_Date": "date",
-                                            "Geo_Location": "region", "Country": "country"} )
+    df_grouped = df_grouped.rename(columns= {"Virus Name":"virus", "Accession": "accession", "Isolate Collection date": "date",
+                                            "Geographic Region": "region", "Geographic Location": "country"} )
 
     # Write to directory: metadata only containing sequences where all segments are present
+    path = pathlib.Path('data')
+    path.mkdir(parents=True, exist_ok=True)
     df_grouped.to_csv('data/all_sequences_grouped.tsv', sep="\t")
 
     
@@ -62,9 +92,7 @@ def create_segment_metadata():
     metadata_L = df_all.loc[df_all['Segment'] == 'L']
     metadata_L.to_csv('data/metadata_L.tsv', sep="\t")
 
-def create_segment_fasta():
-    # df2 = pd.read_csv("sequences.csv")
-    raw_sequences = "data/sequences.fasta"
+def create_segment_fasta(raw_sequences):
     all_sequences = "data/all_sequences_renamed.fasta"
     metadata_S = pd.read_csv("data/metadata_S.tsv", sep='\t')       
     groups_S = metadata_S["group_id"].tolist()
@@ -124,7 +152,9 @@ if __name__=="__main__":
     parser.add_argument('--metadata', type=str, required=True, help="csv file containing all sequences")
     parser.add_argument('--sequences', type=str, required=True, help="fasta file containing all sequences")
     args = parser.parse_args()
+    df_metadata = pd.read_csv(args.metadata, sep="\t", on_bad_lines='warn')
+    get_segment_data(args.sequences, df_metadata)
 
-    group_metadata(args.metadata)
+    group_metadata(df_metadata)
     create_segment_metadata()
-    create_segment_fasta()
+    create_segment_fasta(args.sequences)

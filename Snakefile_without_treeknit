@@ -1,24 +1,74 @@
+SEGMENTS = ["M", "L", "S"]
+
 rule all:
     input:
-        auspice_json = expand("auspice/CCHF_notreeknit_{Segment}.json", Segment = glob_wildcards("./data/metadata_{Segment}.tsv").Segment)
+        expand("auspice/CCHF_notreeknit_{Segment}.json", Segment=SEGMENTS)
 
-input_fasta = "data/sequences_{Segment}.fasta",
-input_metadata = "data/metadata_{Segment}.tsv",
-input_fasta_index = "data/sequences_M.fasta",
-input_metadata_index = "data/metadata_M.tsv",
 dropped_strains = "config/dropped_strains.txt",
 reference = "config/outgroup_{Segment}.gb",
 colors = "config/colors.tsv",
 lat_longs = "config/lat_longs.tsv",
 auspice_config = "config/auspice_config.json"
+TAXON_ID = 3052518
+
+rule fetch_ncbi_dataset_package:
+    output:
+        dataset_package="data/ncbi_dataset.zip",
+    shell:
+        """
+        datasets download virus genome taxon {TAXON_ID} \
+            --no-progressbar \
+            --filename {output.dataset_package} \
+        """
+
+rule extract_ncbi_dataset_sequences:
+    input:
+        dataset_package="data/ncbi_dataset.zip",
+    output:
+        ncbi_dataset_sequences="data/sequences.fasta",
+    shell:
+        """
+        unzip -jp {input.dataset_package} \
+            ncbi_dataset/data/genomic.fna \
+        | seqkit seq -w0 \
+        > {output.ncbi_dataset_sequences}
+        """
+
+rule format_ncbi_dataset_report:
+    input:
+        dataset_package="data/ncbi_dataset.zip",
+    output:
+        ncbi_dataset_tsv="data/metadata_post_extract.tsv",
+    shell:
+        """
+        dataformat tsv virus-genome \
+            --package {input.dataset_package} \
+            > {output.ncbi_dataset_tsv}
+        """
+
+rule filter_rawdata:
+    input:
+        sequences="data/sequences.fasta",
+        ncbi_dataset_tsv="data/metadata_post_extract.tsv",
+    output:
+        sequences = expand("data/sequences_{Segment}.fasta", Segment=SEGMENTS),
+        metadata = expand("data/metadata_{Segment}.tsv", Segment=SEGMENTS)
+    shell:
+        """
+        python scripts/filter_rawdata.py \
+            --sequences {input.sequences} \
+            --metadata {input.ncbi_dataset_tsv}
+        """
 
 rule index_sequences:
     message:
         """
-        Creating an index of sequence composition for filtering.
+        Creating an index of sequence composition for filtering. 
+        As we link segments and only use samples where we have data 
+        from all segemnts we only need to do this for segment M. 
         """
     input:
-        sequences = input_fasta_index
+        sequences = "data/sequences_M.fasta"
     output:
         sequence_index = "results/sequence_index.tsv"
     shell:
@@ -37,9 +87,9 @@ rule filter:
           - excluding strains in {input.exclude}
         """
     input:
-        sequences = input_fasta_index,
+        sequences = "data/sequences_M.fasta",
         sequence_index = "results/sequence_index.tsv",
-        metadata = input_metadata_index,
+        metadata = "data/metadata_M.tsv",
         exclude = dropped_strains
     output:
         filtered_metadata = "results/initial_filtered_metadata.tsv"
@@ -71,7 +121,7 @@ rule extract_selected_groups:
         Select the group id of filtered sequences
         """
     input:
-        metadata = rules.filter.output.filtered_metadata
+        metadata = "results/initial_filtered_metadata.tsv"
     output:
         filtered_groups_list = "results/filtered_groups.tsv",
         filtered_groups = "results/filtered_groups.txt"
@@ -87,8 +137,8 @@ rule select_sequences:
         Select all sequences according to group-id
         """
     input: 
-        groups = rules.extract_selected_groups.output.filtered_groups,
-        sequences = input_fasta
+        groups = "results/filtered_groups.txt",
+        sequences = "data/sequences_{Segment}.fasta",
     output:
         selected_sequences = "results/selected_sequences_{Segment}.fasta"
     shell:
@@ -103,7 +153,7 @@ rule align:
           - filling gaps with N
         """
     input:
-        sequences = rules.select_sequences.output.selected_sequences,
+        sequences = "results/selected_sequences_{Segment}.fasta",
         reference = reference
     output:
         alignment = "results/aligned_{Segment}.fasta"
@@ -119,7 +169,7 @@ rule align:
 rule tree:
     message: "Building tree"
     input:
-        alignment = rules.align.output.alignment
+        alignment = "results/aligned_{Segment}.fasta"
     output:
         tree = "results/tree_raw_{Segment}.nwk"
     shell:
@@ -140,9 +190,9 @@ rule refine:
           - filter tips more than {params.clock_filter_iqd} IQDs from clock expectation
         """
     input:
-        tree = rules.tree.output.tree,
-        alignment = rules.align.output,
-        metadata = input_metadata
+        tree = "results/tree_raw_{Segment}.nwk",
+        alignment = "results/aligned_{Segment}.fasta",
+        metadata =  "data/metadata_{Segment}.tsv",
     output:
         tree = "results/tree_{Segment}.nwk",
         node_data = "results/branch_lengths_{Segment}.json"
@@ -169,8 +219,8 @@ rule refine:
 rule ancestral:
     message: "Reconstructing ancestral sequences and mutations"
     input:
-        tree = rules.refine.output.tree,
-        alignment = rules.align.output
+        tree = "results/tree_{Segment}.nwk",
+        alignment = "results/aligned_{Segment}.fasta"
     output:
         node_data = "results/nt_muts_notreeknit_{Segment}.json"
     params:
@@ -187,8 +237,8 @@ rule ancestral:
 rule translate:
     message: "Translating amino acid sequences"
     input:
-        tree = rules.refine.output.tree,
-        node_data = rules.ancestral.output.node_data,
+        tree = "results/tree_{Segment}.nwk",
+        node_data = "results/nt_muts_notreeknit_{Segment}.json",
         reference = reference
     output:
         node_data = "results/aa_muts_notreeknit_{Segment}.json"
@@ -204,8 +254,8 @@ rule translate:
 rule traits:
     message: "Inferring ancestral traits for {params.columns!s}"
     input:
-        tree = rules.refine.output.tree,
-        metadata = input_metadata
+        tree = "results/tree_{Segment}.nwk",
+        metadata =  "data/metadata_{Segment}.tsv",
     output:
         node_data = "results/traits_notreeknit_{Segment}.json",
     params:
@@ -226,7 +276,7 @@ rule export:
     message: "Exporting data files for for auspice"
     input:
         tree = rules.refine.output.tree,
-        metadata = input_metadata,
+        metadata =  "data/metadata_{Segment}.tsv",
         branch_lengths = rules.refine.output.node_data,
         traits = rules.traits.output.node_data,
         nt_muts = rules.ancestral.output.node_data,
@@ -251,11 +301,3 @@ rule export:
             --output {output.auspice_json} \
             --metadata-id-columns {params.id_column}
         """
-
-rule clean:
-    message: "Removing directories: {params}"
-    params:
-        "results ",
-        "auspice"
-    shell:
-        "rm -rfv {params}"
