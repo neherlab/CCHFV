@@ -4,7 +4,7 @@ This repository provides scripts for the phylogenetic analysis of the CCHF virus
 
 ## Installation
 
-To run the workflow using TreeKnit you need to set up an environment containing Nextstrain and Julia with TreeKnit and TreeTools. The workflow can then be build from within this environment.
+To run the workflow using TreeKnit you need to set up an environment containing [Nextstrain](https://docs.nextstrain.org/en/latest/install.html) and Julia with TreeKnit and TreeTools. The workflow can then be build from within this environment.
 
 ## Get the data
 
@@ -32,10 +32,22 @@ If julia is not available or TreeKnit should be excluded from the workflow the s
 
 The third snakefile `Snakefile_without_linking` creates the phylogenetic trees of all segments separately without ensuring that the sequences for each segment are chosen from the same set of samples, making it harder to create tanglegrams of the trees.
 
-## Development
+## Local Development
 
 For local development activate the micromamba environment using:
 
 ```
-    micromamba create -f environment.yml --platform ...
+    micromamba create -f environment.yml --platform=linux/amd64
+```
+
+You can format your snakemake files using
+
+```
+snakefmt Snakefile ${file} Snakefile_without_treeknit
+```
+
+You can visualize the workflow using:
+
+```
+snakemake -s ${file} --dag | dot -Tpng > dag.png
 ```
