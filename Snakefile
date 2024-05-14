@@ -261,6 +261,7 @@ rule ancestral:
     input:
         tree="results/tree_{Segment}_resolved.nwk",
         alignment=rules.align.output,
+        reference=reference,
     output:
         node_data="results/nt_muts_{Segment}.json",
     params:
@@ -271,6 +272,7 @@ rule ancestral:
             --tree {input.tree} \
             --alignment {input.alignment} \
             --output-node-data {output.node_data} \
+            --root-sequence {input.reference} \
             --inference {params.inference}
         """
 
@@ -291,6 +293,20 @@ rule translate:
             --ancestral-sequences {input.node_data} \
             --reference-sequence {input.reference} \
             --output-node-data {output.node_data} \
+        """
+
+
+rule clades:
+    input:
+        tree=rules.refine.output.tree,
+    output:
+        node_data="results/clades_{Segment}.json",
+    shell:
+        """
+        python scripts/get_clades.py \
+            --tree {input.tree} \
+            --node-data {output.node_data} \
+            --clade-name {wildcards.Segment}
         """
 
 
@@ -323,6 +339,7 @@ rule export:
     input:
         tree="results/tree_{Segment}_resolved.nwk",
         metadata="data/metadata_{Segment}.tsv",
+        clades=rules.clades.output.node_data,
         branch_lengths=rules.refine.output.node_data,
         traits=rules.traits.output.node_data,
         nt_muts=rules.ancestral.output.node_data,
@@ -339,11 +356,10 @@ rule export:
         augur export v2 \
             --tree {input.tree} \
             --metadata {input.metadata} \
-            --node-data {input.branch_lengths} {input.traits} {input.nt_muts} {input.aa_muts} \
+            --node-data {input.branch_lengths} {input.traits} {input.nt_muts} {input.aa_muts} {input.clades} \
             --colors {input.colors} \
             --lat-longs {input.lat_longs} \
             --auspice-config {input.auspice_config} \
-            --include-root-sequence \
             --output {output.auspice_json} \
             --metadata-id-columns {params.id_column}
         """
