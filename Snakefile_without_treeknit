@@ -268,11 +268,12 @@ rule translate:
             --output-node-data {output.node_data} \
         """
 
+
 rule clades:
     input:
-        tree = rules.refine.output.tree
+        tree=rules.refine.output.tree,
     output:
-        node_data = "results/clades_{Segment}.json"
+        node_data="results/clades_{Segment}.json",
     shell:
         """
         python scripts/get_clades.py \

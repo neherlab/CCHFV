@@ -43,7 +43,7 @@ For local development activate the micromamba environment using:
 You can format your snakemake files using
 
 ```
-snakefmt Snakefile ${file} Snakefile_without_treeknit
+snakefmt ${file}
 ```
 
 You can visualize the workflow using:
