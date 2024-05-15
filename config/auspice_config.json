@@ -1,7 +1,9 @@
 {
   "title": "CCHF Virus",
   "maintainers": [
-    {"name": "Jessica Falkowski"}
+    {
+      "name": "Jessica Falkowski"
+    }
   ],
   "build_url": "https://github.com/nextstrain/CCHFV",
   "colorings": [
@@ -29,6 +31,11 @@
       "key": "region",
       "title": "Region",
       "type": "categorical"
+    },
+    {
+      "key": "clade_membership",
+      "title": "Clade",
+      "type": "categorical"
     }
   ],
   "geo_resolutions": [
@@ -36,9 +43,9 @@
     "region"
   ],
   "panels": [
-     "tree",
-     "map",
-     "entropy"
+    "tree",
+    "map",
+    "entropy"
   ],
   "display_defaults": {
     "map_triplicate": true
