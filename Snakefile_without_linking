@@ -13,6 +13,13 @@ lat_longs = ("config/lat_longs.tsv",)
 auspice_config = "config/auspice_config.json"
 TAXON_ID = 3052518
 
+if os.uname().sysname == "Darwin":
+    # Don't use conda-forge unzip on macOS
+    # Due to https://github.com/conda-forge/unzip-feedstock/issues/16
+    unzip = "/usr/bin/unzip"
+else:
+    unzip = "unzip"
+
 
 rule fetch_ncbi_dataset_package:
     output:
@@ -30,11 +37,12 @@ rule extract_ncbi_dataset_sequences:
         dataset_package="data/ncbi_dataset.zip",
     output:
         ncbi_dataset_sequences="data/sequences.fasta",
+    params:
+        unzip=unzip,
     shell:
         """
-        unzip -jp {input.dataset_package} \
-            ncbi_dataset/data/genomic.fna \
-        | seqkit seq -w0 \
+        {params.unzip} -o {input.dataset_package} -d data 
+        seqkit seq -w0 data/ncbi_dataset/data/genomic.fna \
         > {output.ncbi_dataset_sequences}
         """
 
