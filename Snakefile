@@ -351,12 +351,13 @@ rule export:
     output:
         auspice_json="auspice/CCHF_{Segment}_treeknit.json",
     params:
-        id_column="accession",
+        id_column="group_id",
     shell:
         """
         augur export v2 \
             --tree {input.tree} \
             --metadata {input.metadata} \
+            --metadata-columns accession \
             --node-data {input.branch_lengths} {input.traits} {input.nt_muts} {input.aa_muts} {input.clades} \
             --colors {input.colors} \
             --lat-longs {input.lat_longs} \

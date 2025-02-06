@@ -3,9 +3,12 @@
   "maintainers": [
     {
       "name": "Jessica Falkowski"
+    },
+    {
+      "name": "Anna Parker"
     }
   ],
-  "build_url": "https://github.com/nextstrain/CCHFV",
+  "build_url": "https://github.com/neherlab/CCHFV",
   "colorings": [
     {
       "key": "gt",
@@ -46,6 +49,9 @@
     "tree",
     "map",
     "entropy"
+  ],
+  "metadata_columns": [
+    "accession"
   ],
   "display_defaults": {
     "map_triplicate": true
