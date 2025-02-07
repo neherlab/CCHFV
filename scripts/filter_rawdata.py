@@ -31,23 +31,11 @@ def get_segment_data(sequences, metadata_df):
     return metadata_df
 
 
-def group_name(isolate, date, location):
-    country = str(location).split(":")[0]
-    return (
-        str(isolate).replace(" ", "-")
-        + "/"
-        + str(date)
-        + "/"
-        + country.replace(" ", "-")
-    )
-
-
-def group_metadata(df):
-    # Delete rows without date or segment
-    df_filtered = df.dropna(subset=["Isolate Collection date"])
-    df_filtered = df.dropna(subset=["Segment"])
-
+def rename_and_filter(df):
     # Only keep sequences with appropriate lengths
+    df_filtered = df.dropna(subset=["Segment"])
+    df_filtered = df.dropna(subset=["Isolate Collection date"])
+
     df_filtered = df_filtered.loc[df_filtered["Length"] > 250]
     for segment in segments:
         min_length = min_length_dic[segment]
@@ -57,11 +45,36 @@ def group_metadata(df):
                 & (df_filtered["Length"] < min_length)
             ].index
         )
+    # Rename columns
+    df_filtered["country"] = df_filtered["Geographic Location"].apply(
+        lambda x: x.split(":")[0] if isinstance(x, str) else None
+    )
+    df_renamed = df_filtered.rename(
+        columns={
+            "Virus Name": "virus",
+            "Accession": "accession",
+            "Isolate Collection date": "date",
+            "Geographic Region": "region",
+            "Submitter Names": "author"
+        }
+    )
+    return df_renamed
 
+def group_name(isolate, date, country):
+    return (
+        str(isolate).replace(" ", "-")
+        + "/"
+        + str(date)
+        + "/"
+        + str(country).replace(" ", "-")
+    )
+
+
+def group_metadata(df):
     # Group sequences according to isolate and collection date
-    df_grouped = df_filtered
+    df_grouped = df
     grouped = df_grouped.groupby(
-        ["Isolate Lineage", "Isolate Collection date", "Geographic Location"]
+        ["Isolate Lineage", "date", "country"]
     )
     groups = grouped.groups.keys()
 
@@ -73,8 +86,8 @@ def group_metadata(df):
         df_grouped["group_id"] = df_grouped.apply(
             lambda row: group_name(isolate, date, location)
             if row["Isolate Lineage"] == isolate
-            and row["Isolate Collection date"] == date
-            and row["Geographic Location"] == location
+            and row["date"] == date
+            and row["country"] == location
             else row["group_id"],
             axis=1,
         )
@@ -103,20 +116,6 @@ def group_metadata(df):
 
     df_grouped = df_grouped.loc[df_grouped["nr_segments"] == "all"]
 
-    # Rename columns
-    df_grouped["country"] = df_grouped["Geographic Location"].apply(
-        lambda x: x.split(":")[0] if isinstance(x, str) else None
-    )
-    df_grouped = df_grouped.rename(
-        columns={
-            "Virus Name": "virus",
-            "Accession": "accession",
-            "Isolate Collection date": "date",
-            "Geographic Region": "region",
-            "Submitter Names": "author"
-        }
-    )
-
     # Write to directory: metadata only containing sequences where all segments are present
     path = pathlib.Path("data")
     path.mkdir(parents=True, exist_ok=True)
@@ -132,23 +131,28 @@ def write_segment_metadata(df_all):
         )
 
 
-def write_fasta(all_sequences_path, segment, df_all):
+def write_fasta(all_sequences_path, segment, df_all, no_group=False):
     metadata = df_all.loc[df_all["Segment"] == segment]
-    groups = metadata["group_id"].tolist()
     sequences_segment_path = "data/sequences_{0}.fasta".format(segment)
     with open(sequences_segment_path, "w") as seq:
         records = SeqIO.parse(all_sequences_path, "fasta")
         for record in records:
-            group = metadata.loc[metadata["accession"] == record.id]
-            group_ids = list(group["group_id"])
-            if len(group_ids) > 0 and group_ids[0] in groups:
-                name = str(group_ids[0])
-                record.description = record.id
-                record.id = name
+            corresponding_metadata = metadata.loc[metadata["accession"] == record.id]
+            if len(corresponding_metadata) == 0:
+                continue
+            if no_group:
                 SeqIO.write(record, seq, "fasta")
+                continue
+            group_ids = list(corresponding_metadata["group_id"])
+            if len(group_ids) == 0:
+                continue
+            name = str(group_ids[0])
+            record.description = record.id
+            record.id = name
+            SeqIO.write(record, seq, "fasta")
 
 
-def write_segment_fasta(raw_sequences, df_all):
+def write_segment_fasta(raw_sequences, df_all, no_group=False):
     all_sequences_path = "data/all_sequences_renamed.fasta"
 
     with open(all_sequences_path, "w") as renamed:
@@ -157,7 +161,7 @@ def write_segment_fasta(raw_sequences, df_all):
             record.description = record.id
             SeqIO.write(record, renamed, "fasta")
     for segment in segments:
-        write_fasta(all_sequences_path, segment, df_all)
+        write_fasta(all_sequences_path, segment, df_all, no_group)
 
 
 if __name__ == "__main__":
@@ -175,10 +179,22 @@ if __name__ == "__main__":
         required=True,
         help="fasta file containing all sequences",
     )
+    parser.add_argument(
+        "--no-group",
+        type=bool,
+        default=False,
+        help="whether to group sequences by isolate or not",
+    )
     args = parser.parse_args()
     df_metadata = pd.read_csv(args.metadata, sep="\t", on_bad_lines="warn")
     df_metadata = get_segment_data(args.sequences, df_metadata)
+    df_renamed = rename_and_filter(df_metadata)
 
-    df_grouped = group_metadata(df_metadata)
+    if args.no_group:
+        write_segment_metadata(df_renamed)
+        write_segment_fasta(args.sequences, df_renamed, args.no_group)
+        exit()
+
+    df_grouped = group_metadata(df_renamed)
     write_segment_metadata(df_grouped)
     write_segment_fasta(args.sequences, df_grouped)
