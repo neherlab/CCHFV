@@ -3,7 +3,7 @@ SEGMENTS = ["M", "L", "S"]
 
 rule all:
     input:
-        expand("auspice/CCHF_{Segment}_renamed.json", Segment=SEGMENTS),
+        expand("auspice/CCHF_{Segment}.json", Segment=SEGMENTS),
 
 
 dropped_strains = ("config/dropped_strains.txt",)
@@ -12,6 +12,13 @@ colors = ("config/colors.tsv",)
 lat_longs = ("config/lat_longs.tsv",)
 auspice_config = "config/auspice_config.json"
 TAXON_ID = 3052518
+
+if os.uname().sysname == "Darwin":
+    # Don't use conda-forge unzip on macOS
+    # Due to https://github.com/conda-forge/unzip-feedstock/issues/16
+    unzip = "/usr/bin/unzip"
+else:
+    unzip = "unzip"
 
 
 rule fetch_ncbi_dataset_package:
@@ -30,11 +37,12 @@ rule extract_ncbi_dataset_sequences:
         dataset_package="data/ncbi_dataset.zip",
     output:
         ncbi_dataset_sequences="data/sequences.fasta",
+    params:
+        unzip=unzip,
     shell:
         """
-        unzip -jp {input.dataset_package} \
-            ncbi_dataset/data/genomic.fna \
-        | seqkit seq -w0 \
+        {params.unzip} -o {input.dataset_package} -d data 
+        seqkit seq -w0 data/ncbi_dataset/data/genomic.fna \
         > {output.ncbi_dataset_sequences}
         """
 
@@ -61,7 +69,7 @@ rule filter_rawdata:
         metadata=expand("data/metadata_{Segment}.tsv", Segment=SEGMENTS),
     shell:
         """
-        python scripts/filter_rawdata.py \
+        python scripts/filter_rawdata.py --no-group True \
             --sequences {input.sequences} \
             --metadata {input.ncbi_dataset_tsv}
         """
@@ -104,7 +112,6 @@ rule filter:
         sequences_per_group=20,
         id_column="accession",
         min_date=1900,
-        query="nr_segments == 'all'",
     shell:
         """
         augur filter \
@@ -117,8 +124,6 @@ rule filter:
             --sequences-per-group {params.sequences_per_group} \
             --metadata-id-columns {params.id_column} \
             --min-date {params.min_date} \
-            --query {params.query:q}
-
         """
 
 
@@ -302,25 +307,6 @@ rule export:
             --auspice-config {input.auspice_config} \
             --output {output.auspice_json} \
             --metadata-id-columns {params.id_column}
-        """
-
-
-rule final_strain_name:
-    input:
-        auspice_json=rules.export.output.auspice_json,
-        metadata=rules.filter.input.metadata,
-    output:
-        auspice_json="auspice/CCHF_{Segment}_renamed.json",
-    params:
-        strain_id="accession",
-        display_strain_field="group_id",
-    shell:
-        """
-        python3 scripts/set_final_strain_name.py --metadata {input.metadata} \
-                --metadata-id-columns {params.strain_id} \
-                --input-auspice-json {input.auspice_json} \
-                --display-strain-name {params.display_strain_field} \
-                --output {output.auspice_json}
         """
 
 

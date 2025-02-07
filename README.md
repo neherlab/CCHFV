@@ -4,7 +4,14 @@ This repository provides scripts for the phylogenetic analysis of the CCHF virus
 
 ## Installation
 
-To run the workflow using TreeKnit you need to set up an environment containing [Nextstrain](https://docs.nextstrain.org/en/latest/install.html) and Julia with TreeKnit and TreeTools. The workflow can then be build from within this environment.
+To run the workflow using TreeKnit you need to set up an environment containing [Nextstrain](https://docs.nextstrain.org/en/latest/install.html) and Julia with [TreeKnit](https://github.com/PierreBarrat/TreeKnit.jl) and TreeTools. The workflow can then be build from within this environment.
+
+### WARNING
+TreeKnit currently only runs on julia 1.7 - this does not exist micromamba for arm, 
+```
+micromamba create -n julia17_trial -c conda-forge julia=1.7 --platform osx-64
+```
+creates an environment with julia 1.7, however this isn't compatible with the other dependencies. I installed julia 1.7.3 via dmg and then compiled the treeknit package to run these scripts.
 
 ## Get the data
 
@@ -38,6 +45,7 @@ For local development activate the micromamba environment using:
 
 ```
     micromamba create -f environment.yml --platform=linux/amd64
+    micromamba activate cchfv
 ```
 
 You can format your snakemake files using

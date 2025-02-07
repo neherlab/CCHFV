@@ -1,3 +1,4 @@
+# Nextclade requires a clade annotation to use tree in a dataset
 import json
 from Bio import Phylo
 import argparse

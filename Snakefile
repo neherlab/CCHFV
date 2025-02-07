@@ -13,6 +13,12 @@ lat_longs = ("config/lat_longs.tsv",)
 auspice_config = "config/auspice_config.json"
 TAXON_ID = 3052518
 
+if os.uname().sysname == "Darwin":
+    # Don't use conda-forge unzip on macOS
+    # Due to https://github.com/conda-forge/unzip-feedstock/issues/16
+    unzip = "/usr/bin/unzip"
+else:
+    unzip = "unzip"
 
 rule fetch_ncbi_dataset_package:
     output:
@@ -30,11 +36,12 @@ rule extract_ncbi_dataset_sequences:
         dataset_package="data/ncbi_dataset.zip",
     output:
         ncbi_dataset_sequences="data/sequences.fasta",
+    params:
+        unzip=unzip,
     shell:
         """
-        unzip -jp {input.dataset_package} \
-            ncbi_dataset/data/genomic.fna \
-        | seqkit seq -w0 \
+        {params.unzip} -o {input.dataset_package} -d data 
+        seqkit seq -w0 data/ncbi_dataset/data/genomic.fna \
         > {output.ncbi_dataset_sequences}
         """
 
@@ -245,13 +252,7 @@ rule use_treeknit:
         tree_L_res="results/tree_L_resolved.nwk",
     shell:
         """
-        julia scripts/treeknit_cli.jl \
-            {input.tree_S} \
-            {input.tree_M} \
-            {input.tree_L} \
-            --output_S {output.tree_S_res} \
-            --output_M {output.tree_M_res} \
-            --output_L {output.tree_L_res}
+        treeknit {input.tree_S} {input.tree_L} {input.tree_M} --better-trees --rounds 3 -o results
         """
 
 
@@ -350,12 +351,13 @@ rule export:
     output:
         auspice_json="auspice/CCHF_{Segment}_treeknit.json",
     params:
-        id_column="accession",
+        id_column="group_id",
     shell:
         """
         augur export v2 \
             --tree {input.tree} \
             --metadata {input.metadata} \
+            --metadata-columns accession \
             --node-data {input.branch_lengths} {input.traits} {input.nt_muts} {input.aa_muts} {input.clades} \
             --colors {input.colors} \
             --lat-longs {input.lat_longs} \
