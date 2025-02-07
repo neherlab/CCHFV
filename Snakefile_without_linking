@@ -9,6 +9,7 @@ rule all:
 dropped_strains = ("config/dropped_strains.txt",)
 reference = ("config/outgroup_{Segment}.gb",)
 reference_fasta = ("config/reference_{Segment}.fasta",)
+reference_gff3 = ("config/genome_annotation_{Segment}.gff3",)
 pathogen_json = ("config/pathogen_{Segment}.json",)
 colors = ("config/colors.tsv",)
 lat_longs = ("config/lat_longs.tsv",)
@@ -242,7 +243,7 @@ rule translate:
     input:
         tree=rules.refine.output.tree,
         node_data=rules.ancestral.output.node_data,
-        reference=reference,
+        reference=reference_gff3,
     output:
         node_data="results/aa_muts_{Segment}.json",
     shell:

@@ -1,7 +1,10 @@
 {
     "alignmentParams": {
         "minSeedCover": 0.01,
-        "retryReverseComplement": true
+        "retryReverseComplement": true,
+        "penaltyGapOpen":18,
+        "penaltyGapOpenInFrame":19,
+        "penaltyGapOpenOutOfFrame":20
     },
     "schemaVersion": "3.0.0"
 }

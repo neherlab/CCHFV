@@ -4,7 +4,9 @@
         "kmerLength": 7,
         "allowedMismatches": 10,
         "retryReverseComplement": true,
-        "excessBandwidth": 50
+        "penaltyGapOpen":24,
+        "penaltyGapOpenInFrame":26,
+        "penaltyGapOpenOutOfFrame":28
     },
     "schemaVersion": "3.0.0"
 }
