@@ -1,0 +1,10 @@
+{
+    "alignmentParams": {
+        "minSeedCover": 0.01,
+        "kmerLength": 7,
+        "allowedMismatches": 10,
+        "retryReverseComplement": true,
+        "excessBandwidth": 50
+    },
+    "schemaVersion": "3.0.0"
+}

@@ -18,3 +18,4 @@ dependencies:
   - snakefmt
   - tsv-utils
   - augur
+  - nextclade

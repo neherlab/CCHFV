@@ -8,6 +8,8 @@ rule all:
 
 dropped_strains = ("config/dropped_strains.txt",)
 reference = ("config/outgroup_{Segment}.gb",)
+reference_fasta = ("config/reference_{Segment}.fasta",)
+pathogen_json = ("config/pathogen_{Segment}.json",)
 colors = ("config/colors.tsv",)
 lat_longs = ("config/lat_longs.tsv",)
 auspice_config = "config/auspice_config.json"
@@ -130,21 +132,24 @@ rule filter:
 rule align:
     message:
         """
-        Aligning sequences to {input.reference}
-          - filling gaps with N
+        Aligning sequences to {input.reference_fasta}
         """
     input:
         sequences=rules.filter.output.sequences,
-        reference=reference,
+        reference_fasta=reference_fasta,
+        pathogen_json=pathogen_json,
     output:
         alignment="results/aligned_{Segment}.fasta",
     shell:
         """
-        augur align \
-            --sequences {input.sequences} \
-            --reference-sequence {input.reference} \
-            --output {output.alignment} \
-            --fill-gaps
+        nextclade run \
+        --input-pathogen-json={input.pathogen_json} \
+        --input-ref={input.reference_fasta} \
+        --output-fasta={output.alignment} \
+        --output-tsv={output.alignment}.tsv \
+        --include-reference=true \
+        --replace-unknown=true \
+        {input.sequences}
         """
 
 
@@ -153,13 +158,21 @@ rule tree:
         "Building tree"
     input:
         alignment=rules.align.output.alignment,
+        constraint_tree="config/constraint_tree_S.nwk",
     output:
         tree="results/tree_raw_{Segment}.nwk",
     shell:
         """
+        if [[ "{wildcards.Segment}" == "S" ]]; then
+        augur tree \
+            --alignment {input.alignment} \
+            --tree-builder-args="-g {input.constraint_tree}" \
+            --output {output.tree}
+        else
         augur tree \
             --alignment {input.alignment} \
             --output {output.tree}
+        fi
         """
 
 
@@ -245,14 +258,25 @@ rule translate:
 rule clades:
     input:
         tree=rules.refine.output.tree,
+        aa_muts=rules.translate.output.node_data,
+        nuc_muts=rules.ancestral.output.node_data,
+        clades="config/clades.tsv",
     output:
         node_data="results/clades_{Segment}.json",
     shell:
         """
-        python scripts/get_clades.py \
+        if [[ "{wildcards.Segment}" == "S" ]]; then
+            augur clades \
+            --tree {input.tree} \
+            --mutations {input.nuc_muts} {input.aa_muts} \
+            --clades {input.clades} \
+            --output-node-data {output.node_data}
+        else
+            python scripts/get_clades.py \
             --tree {input.tree} \
             --node-data {output.node_data} \
             --clade-name {wildcards.Segment}
+        fi
         """
 
 
@@ -304,6 +328,7 @@ rule export:
             --metadata {input.metadata} \
             --node-data {input.branch_lengths} {input.traits} {input.nt_muts} {input.aa_muts} {input.clades} \
             --lat-longs {input.lat_longs} \
+            --colors {input.colors} \
             --auspice-config {input.auspice_config} \
             --output {output.auspice_json} \
             --metadata-id-columns {params.id_column}

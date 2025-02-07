@@ -1,0 +1,8 @@
+{
+    "alignmentParams": {
+        "minSeedCover": 0.01,
+        "kmerLength": 7,
+        "retryReverseComplement": true
+    },
+    "schemaVersion": "3.0.0"
+}
