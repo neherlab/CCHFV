@@ -9,27 +9,6 @@ segments = ["M", "L", "S"]
 min_length_dic = {"S": 1000, "M": 4000, "L": 10000}
 
 
-def get_segment_data(sequences, metadata_df):
-    records = SeqIO.parse(sequences, "fasta")
-    segment_dic = {}
-    for record in records:
-        found = False
-        for segment in segments:
-            re_input = re.compile(".*segment {0}.*".format(segment), re.IGNORECASE)
-            x = re_input.search(record.description)
-            if x:
-                segment_dic[record.id] = segment
-                found = True
-                break
-        if not found:
-            segment_dic[record.id] = np.nan
-    segment_list = []
-    for accession in metadata_df["Accession"]:
-        segment_list.append(segment_dic[accession])
-
-    metadata_df.insert(2, "Segment", segment_list)
-    return metadata_df
-
 
 def rename_and_filter(df):
     # Only keep sequences with appropriate lengths
@@ -187,7 +166,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     df_metadata = pd.read_csv(args.metadata, sep="\t", on_bad_lines="warn")
-    df_metadata = get_segment_data(args.sequences, df_metadata)
     df_renamed = rename_and_filter(df_metadata)
 
     if args.no_group:
